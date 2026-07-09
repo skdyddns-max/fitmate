@@ -1,10 +1,21 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { navigate } from '../App'
 import { getSession, isOnline, store } from '../store'
 import type { Challenge, Checkin, Mission, Participant, Reaction, WeightEntry } from '../types'
-import { achievementRate, formatDateKo, streak, todayStr } from '../utils'
+import {
+  achievementRate,
+  bestStreak,
+  completeDays,
+  ddayLabel,
+  formatDateKo,
+  getBadges,
+  streak,
+  todayStr,
+} from '../utils'
 import GrassCalendar from '../components/GrassCalendar'
 import WeightChart from '../components/WeightChart'
+import ProgressRing from '../components/ProgressRing'
+import Confetti from '../components/Confetti'
 
 const REACT_EMOJIS = ['👏', '🔥', '💪']
 
@@ -21,6 +32,8 @@ export default function Room({ code }: { code: string }) {
   const [weightInput, setWeightInput] = useState('')
   const [toast, setToast] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [celebrate, setCelebrate] = useState(false)
+  const celebrateTimer = useRef<number>()
 
   const today = todayStr()
   const session = getSession(code)
@@ -75,9 +88,32 @@ export default function Room({ code }: { code: string }) {
   }
   if (!me) return <div className="screen" /> // 데이터 로딩 중
 
+  const dday = ddayLabel(challenge.startDate, challenge.endDate)
+  const notStarted = dday.state === 'before'
+  const ended = dday.state === 'over'
+
   async function toggleMission(missionId: string) {
+    const wasAllDone =
+      missions.length > 0 &&
+      missions.every((m) => checkins.some((c) => c.participantId === me!.id && c.missionId === m.id && c.date === today))
+    const turningOn = !checkins.some(
+      (c) => c.participantId === me!.id && c.missionId === missionId && c.date === today,
+    )
     await store.toggleCheckin(challenge!.id, me!.id, missionId, today)
-    reload()
+    await reload()
+    // 방금 체크로 오늘 전체 완료가 됐으면 축하
+    if (turningOn && !wasAllDone) {
+      const nowAllDone = missions.every(
+        (m) =>
+          m.id === missionId ||
+          checkins.some((c) => c.participantId === me!.id && c.missionId === m.id && c.date === today),
+      )
+      if (nowAllDone) {
+        setCelebrate(true)
+        window.clearTimeout(celebrateTimer.current)
+        celebrateTimer.current = window.setTimeout(() => setCelebrate(false), 3200)
+      }
+    }
   }
 
   async function saveWeight() {
@@ -85,7 +121,7 @@ export default function Room({ code }: { code: string }) {
     if (isNaN(v) || v <= 0 || v > 300) return
     await store.upsertWeight(me!.id, today, v)
     setWeightInput('')
-    showToast('체중이 기록됐어요')
+    showToast('체중이 기록됐어요 ⚖️')
     reload()
   }
 
@@ -96,11 +132,14 @@ export default function Room({ code }: { code: string }) {
 
   function copyInvite() {
     const url = `${location.origin}${location.pathname}#/join?code=${challenge!.code}`
-    navigator.clipboard.writeText(`[FitMate] "${challenge!.name}" 챌린지에 초대해요!\n참여 코드: ${challenge!.code}\n${url}`)
-    showToast('초대 링크를 복사했어요')
+    navigator.clipboard.writeText(
+      `🥗 [FitMate] "${challenge!.name}" 챌린지에 초대해요!\n같이 건강해져요 💪\n\n참여 코드: ${challenge!.code}\n${url}`,
+    )
+    showToast('초대 링크를 복사했어요 🔗')
   }
 
   const myTodayDone = checkins.filter((c) => c.participantId === me.id && c.date === today).length
+  const allDoneToday = missions.length > 0 && myTodayDone === missions.length
   const todayWeight = weights.find((w) => w.date === today)
 
   const ranking = participants
@@ -111,26 +150,37 @@ export default function Room({ code }: { code: string }) {
     }))
     .sort((a, b) => b.rate - a.rate || b.stk - a.stk)
 
+  const winner = ranking[0]
+  const myBadges = getBadges(checkins, me.id, missions, challenge.startDate, challenge.endDate)
+
   return (
     <div className="screen">
-      <div className="top-bar">
+      <div className="top-bar" style={{ marginBottom: 12 }}>
         <button className="back-btn" onClick={() => navigate('/')}>
           ←
         </button>
-        <div className="room-header" style={{ marginBottom: 0 }}>
-          <h1>{challenge.name}</h1>
-          <p className="period">
-            {challenge.startDate} ~ {challenge.endDate} · {participants.length}명 참여 중
-          </p>
-        </div>
       </div>
-      <div className="share-row" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <button className="chip" onClick={copyInvite}>
-          🔗 초대 링크 복사
-        </button>
-        <span className="chip" style={{ cursor: 'default' }}>
-          코드 {challenge.code}
-        </span>
+
+      <div className="hero-card">
+        <div className="h-info">
+          <h1>{challenge.name}</h1>
+          <p className="h-meta">
+            {challenge.startDate.slice(5).replace('-', '.')} ~ {challenge.endDate.slice(5).replace('-', '.')} ·{' '}
+            {participants.length}명 함께
+          </p>
+          <div className="h-chips">
+            <span className="hero-chip" style={{ cursor: 'default' }}>
+              {dday.text}
+            </span>
+            <button className="hero-chip" onClick={copyInvite}>
+              🔗 초대하기
+            </button>
+            <span className="hero-chip" style={{ cursor: 'default' }}>
+              {challenge.code}
+            </span>
+          </div>
+        </div>
+        <ProgressRing done={myTodayDone} total={missions.length} />
       </div>
 
       <div className="tabs">
@@ -147,40 +197,56 @@ export default function Room({ code }: { code: string }) {
 
       {tab === 'today' && (
         <>
-          <p style={{ fontSize: 14, color: 'var(--ink-soft)', marginBottom: 10 }}>
-            {formatDateKo(today)} · 오늘 {myTodayDone}/{missions.length} 완료
-          </p>
-          {missions.map((m) => {
-            const done = checkins.some((c) => c.participantId === me.id && c.missionId === m.id && c.date === today)
-            return (
-              <button key={m.id} className={`mission-check ${done ? 'done' : ''}`} onClick={() => toggleMission(m.id)}>
-                <span className="m-emoji">{m.emoji}</span>
-                <span className="m-title">{m.title}</span>
-                <span className="check">✓</span>
-              </button>
-            )
-          })}
+          {ended ? (
+            <div className="winner-banner">
+              🎉 챌린지 종료! 우승 {winner?.p.nickname} ({winner?.rate}%) — 모두 수고했어요!
+            </div>
+          ) : notStarted ? (
+            <div className="all-done-banner">챌린지 시작 전이에요. {dday.text}!</div>
+          ) : (
+            <>
+              <p className="today-date">{formatDateKo(today)}</p>
+              {allDoneToday && <div className="all-done-banner">오늘 미션 올클리어! 내일도 만나요 🎉</div>}
+              {missions.map((m) => {
+                const done = checkins.some(
+                  (c) => c.participantId === me.id && c.missionId === m.id && c.date === today,
+                )
+                return (
+                  <button
+                    key={m.id}
+                    className={`mission-check ${done ? 'done' : ''}`}
+                    onClick={() => toggleMission(m.id)}
+                  >
+                    <span className="m-emoji">{m.emoji}</span>
+                    <span className="m-title">{m.title}</span>
+                    <span className="check">✓</span>
+                  </button>
+                )
+              })}
 
-          <p className="section-title">오늘 체중 (선택 · 나에게만 보여요)</p>
-          <div className="weight-row">
-            <input
-              className="input"
-              type="number"
-              inputMode="decimal"
-              placeholder={todayWeight ? `오늘 기록: ${todayWeight.weightKg}kg` : 'kg'}
-              value={weightInput}
-              onChange={(e) => setWeightInput(e.target.value)}
-            />
-            <button className="btn btn-primary" onClick={saveWeight}>
-              기록
-            </button>
-          </div>
+              <p className="section-title">오늘 체중 ⚖️ (선택 · 나에게만 보여요)</p>
+              <div className="weight-row">
+                <input
+                  className="input"
+                  type="number"
+                  inputMode="decimal"
+                  placeholder={todayWeight ? `오늘 기록: ${todayWeight.weightKg}kg` : 'kg'}
+                  value={weightInput}
+                  onChange={(e) => setWeightInput(e.target.value)}
+                />
+                <button className="btn btn-primary" onClick={saveWeight}>
+                  기록
+                </button>
+              </div>
+            </>
+          )}
 
           <p className="section-title">함께하는 메이트</p>
-          <div className="card" style={{ padding: '4px 14px' }}>
+          <div className="card" style={{ padding: '4px 15px' }}>
             {participants.map((p) => {
               const doneCount = checkins.filter((c) => c.participantId === p.id && c.date === today).length
               const isMe = p.id === me.id
+              const complete = doneCount === missions.length && missions.length > 0
               return (
                 <div key={p.id} className="member-row">
                   <div className="avatar">{p.nickname[0]}</div>
@@ -189,10 +255,8 @@ export default function Room({ code }: { code: string }) {
                       {p.nickname}
                       {isMe && <span className="me-badge">나</span>}
                     </div>
-                    <div className="m-progress">
-                      {doneCount === missions.length && missions.length > 0
-                        ? '오늘 미션 완료! 🎉'
-                        : `오늘 ${doneCount}/${missions.length} 완료`}
+                    <div className={`m-progress ${complete ? 'complete' : ''}`}>
+                      {complete ? '오늘 미션 완료! 🎉' : `오늘 ${doneCount}/${missions.length} 완료`}
                     </div>
                   </div>
                   {isMe ? (
@@ -233,33 +297,68 @@ export default function Room({ code }: { code: string }) {
       )}
 
       {tab === 'rank' && (
-        <div className="card" style={{ padding: '4px 16px' }}>
-          {ranking.map(({ p, rate, stk }, i) => (
-            <div key={p.id} className="rank-row">
-              <div className="rank-no">{i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</div>
-              <div className="r-info">
-                <div className="r-name">
-                  {p.nickname}
-                  {p.id === me.id && <span className="me-badge" style={{ color: 'var(--green-dark)', fontSize: 12 }}> 나</span>}
+        <>
+          {ended && winner && (
+            <div className="winner-banner">👑 최종 우승 — {winner.p.nickname} · 달성률 {winner.rate}%</div>
+          )}
+          <div className="card" style={{ padding: '4px 16px' }}>
+            {ranking.map(({ p, rate, stk }, i) => (
+              <div key={p.id} className="rank-row">
+                <div className="rank-no">{i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</div>
+                <div className="r-info">
+                  <div className="r-name">
+                    {p.nickname}
+                    {p.id === me.id && <span className="me-badge">나</span>}
+                  </div>
+                  <div className="rank-bar">
+                    <div style={{ width: `${rate}%` }} />
+                  </div>
                 </div>
-                <div className="rank-bar">
-                  <div style={{ width: `${rate}%` }} />
+                <div className="r-stats">
+                  <div className="r-rate">{rate}%</div>
+                  {stk > 0 && <div className="r-streak">🔥 {stk}일 연속</div>}
                 </div>
               </div>
-              <div className="r-stats">
-                <div className="r-rate">{rate}%</div>
-                {stk > 0 && <div className="r-streak">🔥 {stk}일 연속</div>}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {tab === 'me' && (
         <>
-          <p className="section-title" style={{ marginTop: 4 }}>
-            인증 달력
-          </p>
+          <div className="stat-grid" style={{ marginTop: 4 }}>
+            <div className="stat-tile">
+              <div className="s-val">{completeDays(checkins, me.id, missions, challenge.startDate, challenge.endDate)}일</div>
+              <div className="s-label">완벽한 하루</div>
+            </div>
+            <div className="stat-tile">
+              <div className="s-val">
+                {bestStreak(checkins, me.id, missions, challenge.startDate, challenge.endDate)}일
+              </div>
+              <div className="s-label">최고 스트릭</div>
+            </div>
+            <div className="stat-tile">
+              <div className="s-val">
+                {weights.length >= 2
+                  ? `${(weights[weights.length - 1].weightKg - weights[0].weightKg).toFixed(1)}kg`
+                  : '—'}
+              </div>
+              <div className="s-label">체중 변화</div>
+            </div>
+          </div>
+
+          <p className="section-title">나의 뱃지</p>
+          <div className="badge-grid">
+            {myBadges.map((b) => (
+              <div key={b.name} className={`badge-tile ${b.earned ? 'earned' : 'locked'}`}>
+                <div className="b-emoji">{b.emoji}</div>
+                <div className="b-name">{b.name}</div>
+                <div className="b-cond">{b.cond}</div>
+              </div>
+            ))}
+          </div>
+
+          <p className="section-title">인증 달력</p>
           <div className="card">
             <GrassCalendar
               startDate={challenge.startDate}
@@ -276,6 +375,7 @@ export default function Room({ code }: { code: string }) {
         </>
       )}
 
+      {celebrate && <Confetti />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )

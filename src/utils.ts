@@ -61,6 +61,79 @@ export function streak(
   return count
 }
 
+/** 챌린지 기간 중 모든 미션을 완료한 날짜 수 */
+export function completeDays(
+  checkins: Checkin[],
+  participantId: string,
+  missions: Mission[],
+  startDate: string,
+  endDate: string,
+): number {
+  const mine = checkins.filter((c) => c.participantId === participantId)
+  return elapsedDates(startDate, endDate).filter(
+    (d) => missions.length > 0 && missions.every((m) => mine.some((c) => c.missionId === m.id && c.date === d)),
+  ).length
+}
+
+/** 기간 전체에서 가장 길었던 연속 완료 일수 */
+export function bestStreak(
+  checkins: Checkin[],
+  participantId: string,
+  missions: Mission[],
+  startDate: string,
+  endDate: string,
+): number {
+  const mine = checkins.filter((c) => c.participantId === participantId)
+  let best = 0
+  let run = 0
+  for (const d of elapsedDates(startDate, endDate)) {
+    const complete =
+      missions.length > 0 && missions.every((m) => mine.some((c) => c.missionId === m.id && c.date === d))
+    run = complete ? run + 1 : 0
+    if (run > best) best = run
+  }
+  return best
+}
+
+export interface Badge {
+  emoji: string
+  name: string
+  cond: string
+  earned: boolean
+}
+
+/** 클라이언트 계산 뱃지 (DB 불필요) */
+export function getBadges(
+  checkins: Checkin[],
+  participantId: string,
+  missions: Mission[],
+  startDate: string,
+  endDate: string,
+): Badge[] {
+  const anyCheckin = checkins.some((c) => c.participantId === participantId)
+  const best = bestStreak(checkins, participantId, missions, startDate, endDate)
+  const days = completeDays(checkins, participantId, missions, startDate, endDate)
+  const totalDays = elapsedDates(startDate, endDate).length
+  const finished = todayStr() > endDate
+  return [
+    { emoji: '🌱', name: '첫 걸음', cond: '첫 인증', earned: anyCheckin },
+    { emoji: '🔥', name: '작심삼일 극복', cond: '3일 연속', earned: best >= 3 },
+    { emoji: '⚡', name: '일주일 정복', cond: '7일 연속', earned: best >= 7 },
+    { emoji: '🏆', name: '2주 챔피언', cond: '14일 연속', earned: best >= 14 },
+    { emoji: '👑', name: '레전드', cond: '28일 연속', earned: best >= 28 },
+    { emoji: '💯', name: '개근왕', cond: '기간 내 개근', earned: finished && totalDays > 0 && days === totalDays },
+  ]
+}
+
+/** D-day 라벨: 시작 전/진행 중/종료 */
+export function ddayLabel(startDate: string, endDate: string): { text: string; state: 'before' | 'on' | 'over' } {
+  const today = todayStr()
+  if (today < startDate) return { text: `시작 D-${daysBetween(today, startDate)}`, state: 'before' }
+  if (today > endDate) return { text: '종료됨', state: 'over' }
+  const left = daysBetween(today, endDate)
+  return { text: left === 0 ? '마지막 날!' : `종료 D-${left}`, state: 'on' }
+}
+
 export function generateCode(): string {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' // 헷갈리는 문자(I,L,O,0,1) 제외
   let code = ''

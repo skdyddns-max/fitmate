@@ -1,0 +1,14 @@
+{
+  "name": "FitMate — 같이 하는 다이어트 챌린지",
+  "short_name": "FitMate",
+  "description": "친구들과 함께하는 다이어트 챌린지",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f8f6",
+  "theme_color": "#10b981",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
