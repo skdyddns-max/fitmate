@@ -2,7 +2,7 @@
 // localStore와 동일한 시그니처 (store.ts에서 환경변수 유무로 선택)
 import { supabase } from './lib/supabase'
 import { setSession, tokenFor } from './session'
-import type { Challenge, Checkin, Mission, Participant, Reaction, WeightEntry } from './types'
+import type { Challenge, Checkin, Mission, Participant, Photo, Reaction, WeightEntry } from './types'
 import type { MissionInput } from './store'
 
 function sb() {
@@ -141,6 +141,35 @@ export const supabaseStore = {
       toParticipantId: r.to_participant_id,
       emoji: r.emoji,
     }))
+  },
+
+  async getPhotos(challengeId: string, date: string): Promise<Photo[]> {
+    const { data, error } = await sb().from('photos').select('*').eq('challenge_id', challengeId).eq('date', date)
+    if (error) throw new Error(error.message)
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      challengeId: r.challenge_id,
+      participantId: r.participant_id,
+      date: r.date,
+      // path 고정 업로드(upsert)라 created_at으로 캐시 무효화
+      url: `${sb().storage.from('fitmate-photos').getPublicUrl(r.path).data.publicUrl}?t=${encodeURIComponent(r.created_at)}`,
+    }))
+  },
+
+  /** Storage 업로드(같은 날짜 경로 덮어쓰기) 후 token 검증 RPC로 기록 */
+  async upsertPhoto(challengeId: string, participantId: string, date: string, image: Blob): Promise<void> {
+    const path = `${participantId}/${date}.jpg`
+    const { error: upErr } = await sb()
+      .storage.from('fitmate-photos')
+      .upload(path, image, { upsert: true, contentType: 'image/jpeg' })
+    if (upErr) throw new Error(upErr.message)
+    const { error } = await sb().rpc('api_upsert_photo', {
+      p_participant: participantId,
+      p_token: tokenFor(participantId),
+      p_date: date,
+      p_path: path,
+    })
+    if (error) throw new Error(error.message)
   },
 
   async toggleReaction(

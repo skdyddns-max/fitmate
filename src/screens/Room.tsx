@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { navigate } from '../App'
 import { getSession, isOnline, store } from '../store'
-import type { Challenge, Checkin, Mission, Participant, Reaction, WeightEntry } from '../types'
+import type { Challenge, Checkin, Mission, Participant, Photo, Reaction, WeightEntry } from '../types'
 import {
   achievementRate,
   bestStreak,
   completeDays,
+  compressImage,
   ddayLabel,
   formatDateKo,
   getBadges,
@@ -28,12 +29,16 @@ export default function Room({ code }: { code: string }) {
   const [checkins, setCheckins] = useState<Checkin[]>([])
   const [reactions, setReactions] = useState<Reaction[]>([])
   const [weights, setWeights] = useState<WeightEntry[]>([])
+  const [photos, setPhotos] = useState<Photo[]>([])
   const [tab, setTab] = useState<Tab>('today')
   const [weightInput, setWeightInput] = useState('')
   const [toast, setToast] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
   const celebrateTimer = useRef<number>()
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const today = todayStr()
   const session = getSession(code)
@@ -43,16 +48,18 @@ export default function Room({ code }: { code: string }) {
     const c = await store.getChallengeByCode(code)
     setChallenge(c)
     if (!c) return
-    const [ms, ps, cks, rs] = await Promise.all([
+    const [ms, ps, cks, rs, phs] = await Promise.all([
       store.getMissions(c.id),
       store.getParticipants(c.id),
       store.getCheckins(c.id),
       store.getReactions(c.id, todayStr()),
+      store.getPhotos(c.id, todayStr()),
     ])
     setMissions(ms)
     setParticipants(ps)
     setCheckins(cks)
     setReactions(rs)
+    setPhotos(phs)
     const s = getSession(code)
     if (s) setWeights(await store.getWeights(s.participantId))
     setLoaded(true)
@@ -128,6 +135,23 @@ export default function Room({ code }: { code: string }) {
   async function react(toId: string, emoji: string) {
     await store.toggleReaction(challenge!.id, today, me!.id, toId, emoji)
     reload()
+  }
+
+  async function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // 같은 파일 재선택 허용
+    if (!file) return
+    setUploading(true)
+    try {
+      const compressed = await compressImage(file)
+      await store.upsertPhoto(challenge!.id, me!.id, today, compressed)
+      showToast('인증샷이 올라갔어요 📸')
+      await reload()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '업로드에 실패했어요.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   function copyInvite() {
@@ -224,6 +248,39 @@ export default function Room({ code }: { code: string }) {
                 )
               })}
 
+              <p className="section-title">오늘의 인증샷 📸</p>
+              <div className="card photo-card">
+                {(() => {
+                  const mine = photos.find((p) => p.participantId === me.id)
+                  return (
+                    <>
+                      {mine && (
+                        <img
+                          className="photo-mine"
+                          src={mine.url}
+                          alt="내 인증샷"
+                          onClick={() => setLightbox({ url: mine.url, name: me.nickname })}
+                        />
+                      )}
+                      <button
+                        className="btn btn-secondary"
+                        disabled={uploading}
+                        onClick={() => fileRef.current?.click()}
+                      >
+                        {uploading ? '업로드 중…' : mine ? '📸 다시 올리기' : '📸 식단·체중계 사진 올리기'}
+                      </button>
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={handlePhotoFile}
+                      />
+                    </>
+                  )
+                })()}
+              </div>
+
               <p className="section-title">오늘 체중 ⚖️ (선택 · 나에게만 보여요)</p>
               <div className="weight-row">
                 <input
@@ -237,6 +294,23 @@ export default function Room({ code }: { code: string }) {
                 <button className="btn btn-primary" onClick={saveWeight}>
                   기록
                 </button>
+              </div>
+            </>
+          )}
+
+          {photos.length > 0 && (
+            <>
+              <p className="section-title">메이트 인증샷</p>
+              <div className="photo-strip">
+                {photos.map((ph) => {
+                  const owner = participants.find((p) => p.id === ph.participantId)
+                  return (
+                    <figure key={ph.id} onClick={() => setLightbox({ url: ph.url, name: owner?.nickname ?? '' })}>
+                      <img src={ph.url} alt={`${owner?.nickname} 인증샷`} loading="lazy" />
+                      <figcaption>{owner?.nickname}</figcaption>
+                    </figure>
+                  )
+                })}
               </div>
             </>
           )}
@@ -376,6 +450,12 @@ export default function Room({ code }: { code: string }) {
       )}
 
       {celebrate && <Confetti />}
+      {lightbox && (
+        <div className="lightbox" onClick={() => setLightbox(null)}>
+          <img src={lightbox.url} alt={`${lightbox.name} 인증샷`} />
+          <p>{lightbox.name}</p>
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )

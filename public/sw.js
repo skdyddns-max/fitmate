@@ -1,5 +1,5 @@
 // FitMate 서비스 워커 — 배포 시 VERSION을 올려야 캐시가 갱신된다
-const VERSION = 'fitmate-v1'
+const VERSION = 'fitmate-v2'
 
 self.addEventListener('install', (e) => {
   self.skipWaiting()

@@ -48,6 +48,14 @@ export interface Reaction {
   emoji: string
 }
 
+export interface Photo {
+  id: string
+  challengeId: string
+  participantId: string
+  date: string
+  url: string // 표시용 URL (Supabase 공개 URL 또는 로컬 dataURL)
+}
+
 export interface Db {
   challenges: Challenge[]
   missions: Mission[]
@@ -55,4 +63,5 @@ export interface Db {
   checkins: Checkin[]
   weights: WeightEntry[]
   reactions: Reaction[]
+  photos: { id: string; challengeId: string; participantId: string; date: string; url: string }[]
 }

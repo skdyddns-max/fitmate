@@ -195,3 +195,43 @@ grant execute on function api_toggle_checkin(uuid, uuid, uuid, date) to anon;
 grant execute on function api_get_weights(uuid, uuid) to anon;
 grant execute on function api_upsert_weight(uuid, uuid, date, numeric) to anon;
 grant execute on function api_toggle_reaction(uuid, date, uuid, uuid, uuid, text) to anon;
+
+-- ============================================================
+-- 사진 인증 확장 (2026-07-10 적용)
+-- ============================================================
+create table photos (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  participant_id uuid not null references participants(id) on delete cascade,
+  date date not null,
+  path text not null,
+  created_at timestamptz default now(),
+  unique (participant_id, date)
+);
+
+alter table photos enable row level security;
+create policy sel_photos on photos for select using (true);
+
+create or replace function api_upsert_photo(p_participant uuid, p_token uuid, p_date date, p_path text)
+returns void language plpgsql security definer as $$
+declare v_ch uuid;
+begin
+  perform assert_token(p_participant, p_token);
+  select challenge_id into v_ch from participants where id = p_participant;
+  insert into photos (challenge_id, participant_id, date, path) values (v_ch, p_participant, p_date, p_path)
+    on conflict (participant_id, date) do update set path = excluded.path, created_at = now();
+end;
+$$;
+grant execute on function api_upsert_photo(uuid, uuid, date, text) to anon;
+
+-- 공개 스토리지 버킷 (1MB 제한, 이미지 전용)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  values ('fitmate-photos', 'fitmate-photos', true, 1048576, array['image/jpeg','image/webp','image/png'])
+  on conflict (id) do nothing;
+
+create policy "fitmate_photos_insert" on storage.objects
+  for insert to anon with check (bucket_id = 'fitmate-photos');
+create policy "fitmate_photos_update" on storage.objects
+  for update to anon using (bucket_id = 'fitmate-photos') with check (bucket_id = 'fitmate-photos');
+create policy "fitmate_photos_select" on storage.objects
+  for select to anon using (bucket_id = 'fitmate-photos');

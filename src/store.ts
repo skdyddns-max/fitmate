@@ -1,8 +1,8 @@
 // 데이터 저장 계층.
 // VITE_SUPABASE_URL이 설정되어 있으면 Supabase(진짜 멀티유저),
 // 없으면 localStorage(같은 기기 안에서만 동작)를 사용한다. 시그니처는 동일.
-import type { Challenge, Checkin, Db, Mission, Participant, Reaction, WeightEntry } from './types'
-import { generateCode, uid } from './utils'
+import type { Challenge, Checkin, Db, Mission, Participant, Photo, Reaction, WeightEntry } from './types'
+import { blobToDataUrl, generateCode, uid } from './utils'
 import { getSession, setSession, type Session } from './session'
 import { supabase } from './lib/supabase'
 import { supabaseStore } from './supabaseStore'
@@ -13,8 +13,12 @@ const DB_KEY = 'fitmate-db'
 
 function loadDb(): Db {
   const raw = localStorage.getItem(DB_KEY)
-  if (raw) return JSON.parse(raw)
-  return { challenges: [], missions: [], participants: [], checkins: [], weights: [], reactions: [] }
+  if (raw) {
+    const db = JSON.parse(raw)
+    if (!db.photos) db.photos = [] // 구버전 데이터 마이그레이션
+    return db
+  }
+  return { challenges: [], missions: [], participants: [], checkins: [], weights: [], reactions: [], photos: [] }
 }
 
 function saveDb(db: Db) {
@@ -110,6 +114,21 @@ const localStore = {
 
   async getReactions(challengeId: string, date: string): Promise<Reaction[]> {
     return loadDb().reactions.filter((r) => r.challengeId === challengeId && r.date === date)
+  },
+
+  /** 오늘의 인증샷 목록 */
+  async getPhotos(challengeId: string, date: string): Promise<Photo[]> {
+    return loadDb().photos.filter((p) => p.challengeId === challengeId && p.date === date)
+  },
+
+  /** 인증샷 업로드(같은 날짜는 교체). 로컬 모드는 dataURL로 저장 */
+  async upsertPhoto(challengeId: string, participantId: string, date: string, image: Blob): Promise<void> {
+    const db = loadDb()
+    const url = await blobToDataUrl(image)
+    const existing = db.photos.find((p) => p.participantId === participantId && p.date === date)
+    if (existing) existing.url = url
+    else db.photos.push({ id: uid(), challengeId, participantId, date, url })
+    saveDb(db)
   },
 
   /** 같은 사람에게 같은 이모지를 다시 누르면 취소 */

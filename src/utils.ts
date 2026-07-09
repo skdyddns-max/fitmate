@@ -145,6 +145,31 @@ export function uid(): string {
   return crypto.randomUUID()
 }
 
+/** 업로드 전 클라이언트 압축: 긴 변 maxEdge로 리사이즈 후 JPEG 변환 */
+export async function compressImage(file: File, maxEdge = 1080, quality = 0.8): Promise<Blob> {
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height))
+  const w = Math.round(bitmap.width * scale)
+  const h = Math.round(bitmap.height * scale)
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h)
+  bitmap.close()
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('이미지 변환에 실패했어요.'))), 'image/jpeg', quality),
+  )
+}
+
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(r.result as string)
+    r.onerror = reject
+    r.readAsDataURL(blob)
+  })
+}
+
 export function formatDateKo(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${'일월화수목금토'[d.getDay()]})`
