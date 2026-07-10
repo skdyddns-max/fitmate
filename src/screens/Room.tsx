@@ -17,6 +17,7 @@ import GrassCalendar from '../components/GrassCalendar'
 import WeightChart from '../components/WeightChart'
 import ProgressRing from '../components/ProgressRing'
 import Confetti from '../components/Confetti'
+import { renderShareCard } from '../lib/shareCard'
 
 const REACT_EMOJIS = ['👏', '🔥', '💪']
 
@@ -36,6 +37,7 @@ export default function Room({ code }: { code: string }) {
   const [loaded, setLoaded] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
   const celebrateTimer = useRef<number>()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -151,6 +153,47 @@ export default function Room({ code }: { code: string }) {
       showToast(err instanceof Error ? err.message : '업로드에 실패했어요.')
     } finally {
       setUploading(false)
+    }
+  }
+
+  async function shareResult() {
+    if (sharing) return
+    setSharing(true)
+    try {
+      const blob = await renderShareCard({
+        challengeName: challenge!.name,
+        nickname: me!.nickname,
+        rate: achievementRate(checkins, me!.id, missions, challenge!.startDate, challenge!.endDate),
+        bestStreak: bestStreak(checkins, me!.id, missions, challenge!.startDate, challenge!.endDate),
+        completeDays: completeDays(checkins, me!.id, missions, challenge!.startDate, challenge!.endDate),
+        weightDelta:
+          weights.length >= 2 ? +(weights[weights.length - 1].weightKg - weights[0].weightKg).toFixed(1) : null,
+        badges: getBadges(checkins, me!.id, missions, challenge!.startDate, challenge!.endDate),
+        periodLabel: `${challenge!.startDate} ~ ${challenge!.endDate}`,
+        code: challenge!.code,
+      })
+      const file = new File([blob], 'fitmate-result.png', { type: 'image/png' })
+      const text = `🥗 FitMate "${challenge!.name}" 챌린지 성적표!\n같이 해요 · 코드 ${challenge!.code}`
+      // 모바일: 네이티브 공유 시트(카톡 등), 실패/미지원: 이미지 저장
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], text })
+          return
+        } catch (err) {
+          if ((err as Error)?.name === 'AbortError') return // 사용자가 공유 취소
+        }
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('성적표 이미지를 저장했어요 📤')
+    } catch {
+      showToast('이미지 생성에 실패했어요.')
+    } finally {
+      setSharing(false)
     }
   }
 
@@ -446,6 +489,14 @@ export default function Room({ code }: { code: string }) {
           <div className="card">
             <WeightChart weights={weights} />
           </div>
+
+          <div style={{ height: 20 }} />
+          <button className="btn btn-primary" disabled={sharing} onClick={shareResult}>
+            {sharing ? '만드는 중…' : '📤 성적표 이미지로 공유하기'}
+          </button>
+          <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', textAlign: 'center', marginTop: 8 }}>
+            달성률·스트릭·뱃지가 담긴 카드로 친구를 초대해요
+          </p>
         </>
       )}
 
