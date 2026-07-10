@@ -10,6 +10,15 @@ function sb() {
   return supabase
 }
 
+function fnUrl() {
+  return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fm-photo`
+}
+
+function fnHeaders(): Record<string, string> {
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  return { apikey: key, Authorization: `Bearer ${key}` }
+}
+
 function mapChallenge(r: any): Challenge {
   return { id: r.id, code: r.code, name: r.name, startDate: r.start_date, endDate: r.end_date, createdAt: r.created_at }
 }
@@ -143,33 +152,35 @@ export const supabaseStore = {
     }))
   },
 
+  // 사진은 Edge Function(fm-photo)이 대행: 업로드는 token 검증 후 service role로 수행,
+  // 목록은 Storage 경로({challengeId}/{date}/{participantId}.jpg)에서 파생 — 별도 테이블 없음
   async getPhotos(challengeId: string, date: string): Promise<Photo[]> {
-    const { data, error } = await sb().from('photos').select('*').eq('challenge_id', challengeId).eq('date', date)
-    if (error) throw new Error(error.message)
-    return (data ?? []).map((r) => ({
-      id: r.id,
-      challengeId: r.challenge_id,
-      participantId: r.participant_id,
-      date: r.date,
-      // path 고정 업로드(upsert)라 created_at으로 캐시 무효화
-      url: `${sb().storage.from('fitmate-photos').getPublicUrl(r.path).data.publicUrl}?t=${encodeURIComponent(r.created_at)}`,
+    const res = await fetch(`${fnUrl()}?challengeId=${challengeId}&date=${date}`, { headers: fnHeaders() })
+    if (!res.ok) throw new Error('사진 목록을 불러오지 못했어요.')
+    const rows: { participantId: string; path: string; updatedAt: string }[] = await res.json()
+    return rows.map((r) => ({
+      id: r.path,
+      challengeId,
+      participantId: r.participantId,
+      date,
+      // 같은 경로에 덮어쓰므로 updatedAt으로 캐시 무효화
+      url: `${sb().storage.from('fitmate-photos').getPublicUrl(r.path).data.publicUrl}?t=${encodeURIComponent(r.updatedAt)}`,
     }))
   },
 
-  /** Storage 업로드(같은 날짜 경로 덮어쓰기) 후 token 검증 RPC로 기록 */
   async upsertPhoto(challengeId: string, participantId: string, date: string, image: Blob): Promise<void> {
-    const path = `${participantId}/${date}.jpg`
-    const { error: upErr } = await sb()
-      .storage.from('fitmate-photos')
-      .upload(path, image, { upsert: true, contentType: 'image/jpeg' })
-    if (upErr) throw new Error(upErr.message)
-    const { error } = await sb().rpc('api_upsert_photo', {
-      p_participant: participantId,
-      p_token: tokenFor(participantId),
-      p_date: date,
-      p_path: path,
+    const buf = new Uint8Array(await image.arrayBuffer())
+    let bin = ''
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000))
+    const res = await fetch(fnUrl(), {
+      method: 'POST',
+      headers: { ...fnHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantId, token: tokenFor(participantId), date, imageBase64: btoa(bin) }),
     })
-    if (error) throw new Error(error.message)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error === 'TOO_LARGE' ? '사진이 너무 커요.' : '업로드에 실패했어요. 다시 시도해주세요.')
+    }
   },
 
   async toggleReaction(
