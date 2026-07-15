@@ -5,39 +5,41 @@
 }
 
 :root {
-  --green: #10b981;
-  --green-dark: #047857;
-  --green-deep: #065f46;
-  --green-bg: #ecfdf5;
-  --green-soft: #d1fae5;
-  --ink: #1a2e26;
-  --ink-soft: #64748b;
-  --line: #e6ece9;
-  --bg: #f4f8f6;
+  /* Energetic palette — bold orange primary + amber, warm cream ground.
+     Variable names kept (JS reads --green-dark); only values changed. */
+  --green: #ea580b;
+  --green-dark: #c2410c;
+  --green-deep: #9a3412;
+  --green-bg: #fff1e6;
+  --green-soft: #fed7aa;
+  --ink: #2a1a0f;
+  --ink-soft: #86644d;
+  --line: #f0dfcd;
+  --bg: #fff6ec;
   --card: #ffffff;
   --amber: #f59e0b;
-  --red: #ef4444;
+  --red: #dc2626;
   --radius: 20px;
-  --shadow: 0 1px 2px rgba(16, 55, 40, 0.04), 0 4px 16px rgba(16, 55, 40, 0.06);
-  --shadow-lift: 0 2px 4px rgba(16, 55, 40, 0.06), 0 10px 28px rgba(16, 55, 40, 0.12);
-  --hero-grad: linear-gradient(135deg, #059669 0%, #10b981 55%, #34d399 100%);
+  --shadow: 0 1px 2px rgba(124, 45, 18, 0.05), 0 4px 16px rgba(124, 45, 18, 0.08);
+  --shadow-lift: 0 2px 4px rgba(124, 45, 18, 0.08), 0 12px 30px rgba(194, 65, 12, 0.16);
+  --hero-grad: linear-gradient(135deg, #c2410c 0%, #ea580b 52%, #f97316 100%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --green: #34d399;
-    --green-dark: #6ee7b7;
-    --green-deep: #a7f3d0;
-    --green-bg: rgba(52, 211, 153, 0.12);
-    --green-soft: rgba(52, 211, 153, 0.22);
-    --ink: #eaf2ee;
-    --ink-soft: #93a6a0;
-    --line: #263832;
-    --bg: #0e1613;
-    --card: #172420;
+    --green: #fb923c;
+    --green-dark: #fdba74;
+    --green-deep: #fed7aa;
+    --green-bg: rgba(251, 146, 60, 0.14);
+    --green-soft: rgba(251, 146, 60, 0.3);
+    --ink: #f7ede4;
+    --ink-soft: #b39a86;
+    --line: #3a2a1e;
+    --bg: #19110b;
+    --card: #241811;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.35);
-    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.5);
-    --hero-grad: linear-gradient(135deg, #047857 0%, #059669 55%, #10b981 100%);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.4), 0 12px 30px rgba(0, 0, 0, 0.5);
+    --hero-grad: linear-gradient(135deg, #9a3412 0%, #c2410c 55%, #ea580b 100%);
   }
 }
 
@@ -80,7 +82,7 @@ body {
 /* ---------- 공통 ---------- */
 .card {
   background: var(--card);
-  border: 1px solid var(--line);
+  border: 2px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   box-shadow: var(--shadow);
@@ -93,7 +95,8 @@ body {
   border-radius: 16px;
   padding: 16px;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: -0.2px;
   font-family: inherit;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
@@ -104,10 +107,12 @@ body {
 .btn-primary {
   background: var(--hero-grad);
   color: #fff;
-  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 6px 18px rgba(234, 88, 11, 0.34);
 }
 .btn-primary:hover {
-  filter: brightness(1.04);
+  filter: brightness(1.05);
+  box-shadow: 0 9px 24px rgba(234, 88, 11, 0.42);
+  transform: translateY(-1px);
 }
 .btn-primary:disabled {
   background: var(--line);
@@ -118,7 +123,10 @@ body {
 .btn-secondary {
   background: var(--green-bg);
   color: var(--green-dark);
-  border: 1px solid var(--green-soft);
+  border: 2px solid var(--green-soft);
+}
+.btn-secondary:hover {
+  filter: brightness(0.98);
 }
 .btn-ghost {
   background: transparent;
@@ -129,7 +137,7 @@ body {
 
 .input {
   width: 100%;
-  border: 1.5px solid var(--line);
+  border: 2px solid var(--line);
   border-radius: 14px;
   padding: 14px;
   font-size: 16px;
@@ -141,7 +149,7 @@ body {
 .input:focus {
   outline: none;
   border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 0 3px rgba(234, 88, 11, 0.18);
 }
 
 .label {
@@ -174,6 +182,7 @@ body {
 }
 .top-bar h1 {
   font-size: 19px;
+  font-weight: 800;
   letter-spacing: -0.3px;
 }
 
@@ -197,7 +206,7 @@ body {
   display: grid;
   place-items: center;
   font-size: 46px;
-  box-shadow: 0 12px 30px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 12px 30px rgba(234, 88, 11, 0.36);
   animation: float 3.2s ease-in-out infinite;
 }
 @keyframes float {
@@ -211,6 +220,7 @@ body {
 }
 .home h1 {
   font-size: 34px;
+  font-weight: 800;
   letter-spacing: -1px;
 }
 .home .tagline {
@@ -308,6 +318,7 @@ body {
   font-size: 42px;
   font-weight: 800;
   letter-spacing: 9px;
+  font-variant-numeric: tabular-nums;
   background: var(--hero-grad);
   -webkit-background-clip: text;
   background-clip: text;
@@ -325,7 +336,7 @@ body {
   border-radius: 22px;
   padding: 20px;
   color: #fff;
-  box-shadow: 0 12px 30px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 12px 30px rgba(194, 65, 12, 0.32);
   margin-bottom: 16px;
   display: flex;
   align-items: center;
@@ -337,6 +348,7 @@ body {
 }
 .hero-card h1 {
   font-size: 21px;
+  font-weight: 800;
   letter-spacing: -0.4px;
   line-height: 1.25;
 }
@@ -438,12 +450,12 @@ body {
   gap: 12px;
   width: 100%;
   background: var(--card);
-  border: 1.5px solid var(--line);
+  border: 2px solid var(--line);
   border-radius: 16px;
   padding: 16px;
   margin-bottom: 9px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink);
   cursor: pointer;
   font-family: inherit;
@@ -621,6 +633,7 @@ body {
   color: var(--ink-soft);
   text-align: center;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 .rank-row .r-info {
   flex: 1;
@@ -651,6 +664,7 @@ body {
   font-size: 18px;
   font-weight: 800;
   color: var(--green-dark);
+  font-variant-numeric: tabular-nums;
 }
 .rank-row .r-streak {
   font-size: 12px;
@@ -688,6 +702,7 @@ body {
   font-weight: 800;
   color: var(--green-dark);
   letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
 }
 .stat-tile .s-label {
   font-size: 11.5px;
@@ -755,7 +770,7 @@ body {
   color: #fff;
 }
 .grass .cell.l3 {
-  background: var(--green);
+  background: #10b981;
   color: #fff;
 }
 .grass .cell.future {
